@@ -1,69 +1,55 @@
-# Process-Long-Subtitles
+# Process Long Subtitles
 
-## 簡介
-本程式（Colab 筆記本）用於處理由影片字幕AI生成工具(Rask AI)生成的過長字幕。該工具有時產生的字幕檔裡，會有某行字幕文字過多的狀況。當字幕文字過長時，本程式會自動將其拆分成數行較短的字幕，並根據原始字幕的時長平均分配每行的顯示時間，從而生成更為美觀且易讀的 SRT 字幕檔。
+一個 Python 工具，用來將 AI 產生（如 Rask.ai、Whisper）的過長 SRT 字幕拆分成多行，並自動均分時間軌，提升字幕可讀性。
 
-## 功能
-- **自動拆行**：檢測字幕中每行的長度，若超過預設的 70 字元，則自動拆分成多行。
-- **時間平分**：根據原始字幕的總時長，平均分配每行的開始與結束時間，確保時序連貫。
-- **SRT 檔生成**：處理後的字幕將輸出成新的 SRT 文件，方便後續使用。
+本版本在原始的「依字數硬切」基礎上，升級為**語意感知斷句（semantic-aware splitting）**：優先在標點與連接詞等自然語意邊界處切分，讓每一行字幕讀起來更通順、更貼近語句的自然停頓。
 
-## 如何使用
-1. **開啟 Colab 筆記本**  
-   點擊下方按鈕，直接在 Google Colab 中開啟此筆記本：
-   
-   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Chihuah/Process-Long-Subtitles/blob/main/Process_Long_Subtitles_(from_Rask_ai).ipynb)
+## 功能特色
 
-2. **執行筆記本**  
-   筆記本已分成多個 cell，請依序執行每個 cell。  
-   - 第一個 cell 會安裝所需的套件 `pysrt`。  
-   - 後續的 cell 定義了處理字幕的函數並執行範例程式碼。
+- **語意斷句**：依下列優先順序尋找斷點，而非單純按字數硬切
+  1. 強標點（`. ! ? ; :`）之後
+  2. 弱標點（`,`、`—`、`-`）之後
+  3. 連接詞（and, but, or, because, which, that, when …）之前
+  4. 以上皆無時，退而在空白處切分（不會切斷英文單字）
+- **長度控制**：每段長度盡量不超過 `max_length`（預設 100 字元，可自訂）
+- **時間軌自動均分**：拆分後的多段字幕，依段數比例重新分配起訖時間
+- **跨分鐘安全**：時間計算以總毫秒數（`ordinal`）為基準，避免長字幕跨分鐘時的時間錯位
 
-3. **上傳輸入檔案**  
-   將你要處理的 SRT 字幕檔（例如 `5-2-03_enL.srt`）上傳至 Colab，或根據需要修改檔案路徑。
+## 環境需求
 
-4. **處理字幕**  
-   筆記本將呼叫 `process_file` 函數來讀取、處理並生成新的 SRT 字幕檔。
+- Python 3
+- [`pysrt`](https://pypi.org/project/pysrt/)
 
-## 筆記本結構
-- **安裝區塊**：安裝 `pysrt` 套件。
-- **匯入區塊**：載入 `pysrt` 和 `textwrap` 模組。
-- **函數定義**：
-  - `process_subtitles(subs, max_length)`：處理字幕，拆分過長的行並重新計算時間。
-  - `process_file(input_file, output_file, max_length=70)`：讀取 SRT 檔案、呼叫處理函數並將結果寫入新檔案。
-- **使用範例**：展示如何處理範例字幕檔。
+```bash
+pip install pysrt
+```
 
-## 工作原理
-- **文字拆分**：對每個字幕項目，先根據換行符拆分原有文字；若某一行超過設定的最大長度，則使用 `textwrap.wrap` 將其拆分成多行。
-- **時間重計算**：若字幕被拆分成多行，則根據原始字幕的持續時間，平均分配各行的開始與結束時間，確保整體時間軌不變。
+## 使用方式
 
-### 範例
-> **原始字幕**  
-> ```
-> 1
-> 00:00:10,000 --> 00:00:20,000
-> 這是一個非常長的字幕，需要被拆分成多個較短的部分以便更好地顯示在螢幕上。
-> ```
-> **拆分後字幕**  
-> ```
-> 1
-> 00:00:10,000 --> 00:00:13,333
-> 這是一個非常長的字幕，
->
-> 2
-> 00:00:13,333 --> 00:00:16,667
-> 需要被拆分成多個較短的部分
->
-> 3
-> 00:00:16,667 --> 00:00:20,000
-> 以便更好地顯示在螢幕上。
-> ```
+於 Jupyter Notebook 或 Google Colab 開啟 `Process_Long_Subtitles.ipynb`，依序執行各 cell，最後呼叫：
 
-## 貢獻
-歡迎提交 Issue 或 Pull Request 來改進此工具。如果你有任何建議或發現問題，請隨時提出。
+```python
+process_file('input.srt', 'output.srt', max_length=100)
+```
+
+- `input_file`：來源 SRT 檔路徑
+- `output_file`：輸出 SRT 檔路徑
+- `max_length`：每行字幕的字元數上限（預設 100）
+
+## 參數調整
+
+- **`max_length`**：依字幕呈現寬度調整。畫面較窄或字體較大時可調小。
+- **`CONJUNCTIONS`**：連接詞清單可自行增減。若發現某些字幕常斷在不理想處，調整此清單最直接。
+
+## 運作說明
+
+工具會逐句讀取 SRT，對超過 `max_length` 的行進行語意斷句，再將原本一句的時間區間依拆分後的段數平均分配給各段。斷句邏輯為「先確保每段不超過長度上限，再盡量切在自然語意邊界」，因此偶爾相鄰兩段長度會有落差，這是為了不超出長度上限的取捨。
+
+## 版本說明
+
+- `Process_Long_Subtitles.ipynb`：**目前版本**，語意斷句強化版。
+- `Process_Long_Subtitles_(from_Rask_ai).ipynb`：早期版本，僅依字數硬切（`textwrap.wrap`），已棄用。
 
 ## 授權
-本專案採用 [MIT License](LICENSE) 授權，詳細內容請參閱 LICENSE 檔案。
 
-## 聯絡方式
-如有任何疑問或建議，請在 GitHub 上發 Issue 與我聯絡。
+MIT License
